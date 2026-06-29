@@ -1,0 +1,6 @@
+{
+  "name": "Absensi Finger Reader",
+  "description": "Simulasi pemindai sidik jari aman (biometrik) untuk absensi presensi real-time dengan enkripsi data AES-256 dan tanda tangan HMAC.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -52,10 +52,12 @@ import com.example.ui.MainViewModel
 
 @Composable
 fun SettingsScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
+    val currentBaseUrl by viewModel.apiBaseUrl.collectAsState()
     val currentUrl by viewModel.apiUrl.collectAsState()
     val currentKey by viewModel.secretKey.collectAsState()
     val currentOffline by viewModel.simulateOffline.collectAsState()
 
+    var baseUrlInput by remember(currentBaseUrl) { mutableStateOf(currentBaseUrl) }
     var urlInput by remember(currentUrl) { mutableStateOf(currentUrl) }
     var keyInput by remember(currentKey) { mutableStateOf(currentKey) }
     var offlineInput by remember(currentOffline) { mutableStateOf(currentOffline) }
@@ -114,16 +116,36 @@ fun SettingsScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.primary
                 )
 
-                // API URL text field
+                // API base URL for employee list
+                OutlinedTextField(
+                    value = baseUrlInput,
+                    onValueChange = { baseUrlInput = it },
+                    label = { Text("Base URL API (untuk daftar karyawan)") },
+                    placeholder = { Text("https://api.absensi-online.com/v1") },
+                    leadingIcon = { Icon(imageVector = Icons.Default.Link, contentDescription = null) },
+                    modifier = Modifier.fillMaxWidth().testTag("input_api_base_url"),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                Text(
+                    text = "Digunakan untuk mengambil daftar karyawan via endpoint GET /employees.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 11.sp
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
                 OutlinedTextField(
                     value = urlInput,
                     onValueChange = { urlInput = it },
                     label = { Text("URL API Gateway Absensi") },
                     placeholder = { Text("https://my-company.com/api/attendance") },
                     leadingIcon = { Icon(imageVector = Icons.Default.Link, contentDescription = null) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("input_api_url"),
+                    modifier = Modifier.fillMaxWidth().testTag("input_api_url"),
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp)
                 )
@@ -218,11 +240,10 @@ fun SettingsScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Save button
                 Button(
                     onClick = {
-                        viewModel.updateSettings(urlInput, keyInput, offlineInput)
-                        saveStatusMessage = "Konfigurasi sistem absensi berhasil disimpan!"
+                        viewModel.updateSettings(baseUrlInput, urlInput, keyInput, offlineInput)
+                        saveStatusMessage = "Konfigurasi berhasil disimpan!"
                     },
                     modifier = Modifier
                         .fillMaxWidth()

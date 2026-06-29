@@ -13,7 +13,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,31 +25,27 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.NetworkCheck
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -64,31 +59,96 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.local.FingerprintEntity
+import com.example.security.BiometricEncryptionUtils
 import com.example.security.BiometricPromptUtils
-import androidx.compose.ui.platform.LocalContext
 import com.example.ui.MainViewModel
 
 @Composable
 fun ScanScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
     val currentContext = LocalContext.current
     val fingerprints by viewModel.allFingerprints.collectAsState()
-    val selectedFingerprint by viewModel.selectedFingerprint.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
     val scanProgress by viewModel.scanProgress.collectAsState()
     val scanMessage by viewModel.scanMessage.collectAsState()
     val scanSuccess by viewModel.scanSuccess.collectAsState()
     val apiUrl by viewModel.apiUrl.collectAsState()
 
-    var dropdownExpanded by remember { mutableStateOf(false) }
     var amoledFodAssist by remember { mutableStateOf(true) }
+    var showFingerprintPicker by remember { mutableStateOf(false) }
+
+    if (showFingerprintPicker && fingerprints.size > 1) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showFingerprintPicker = false },
+            title = { Text("Pilih Karyawan") },
+            text = {
+                Column {
+                    fingerprints.forEach { f ->
+                        Text(
+                            text = "${f.name} (${f.employeeId})",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showFingerprintPicker = false
+                                    viewModel.startAttendanceScan(
+                                        BiometricEncryptionUtils.generateFingerprintHash(f.employeeId)
+                                    )
+                                }
+                                .padding(vertical = 12.dp, horizontal = 4.dp),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showFingerprintPicker = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    fun performScan() {
+        if (fingerprints.isEmpty()) {
+            viewModel.setScanMessage("Belum ada sidik jari terdaftar. Daftar dulu di tab Users!")
+            return
+        }
+        val isAvailable = BiometricPromptUtils.isBiometricAvailable(currentContext)
+        if (isAvailable == "SUCCESS" && currentContext is androidx.fragment.app.FragmentActivity) {
+            BiometricPromptUtils.showBiometricPrompt(
+                activity = currentContext,
+                title = "Absensi Sidik Jari",
+                subtitle = "Verifikasi untuk absensi",
+                description = "Letakkan jari Anda pada sensor biometrik perangkat untuk verifikasi.",
+                onSuccess = {
+                    if (fingerprints.size == 1) {
+                        viewModel.startAttendanceScan(
+                            BiometricEncryptionUtils.generateFingerprintHash(fingerprints.first().employeeId)
+                        )
+                    } else if (fingerprints.size > 1) {
+                        showFingerprintPicker = true
+                    }
+                },
+                onError = { errorString ->
+                    viewModel.setScanMessage("Biometrik gagal: $errorString")
+                }
+            )
+        } else {
+            if (fingerprints.size == 1) {
+                viewModel.startAttendanceScan(
+                    BiometricEncryptionUtils.generateFingerprintHash(fingerprints.first().employeeId)
+                )
+            } else if (fingerprints.size > 1) {
+                showFingerprintPicker = true
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -97,7 +157,7 @@ fun ScanScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // App Header Simulation
+        // Status Terminal Card
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -163,76 +223,7 @@ fun ScanScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        // Dropdown Selector for Registered Fingerprints
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { dropdownExpanded = true }
-                    .testTag("select_fingerprint_card"),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(
-                    1.dp,
-                    MaterialTheme.colorScheme.outlineVariant
-                ),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "Profil Sidik Jari Absensi",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = selectedFingerprint?.let { "${it.name} - ${it.employeeId}" }
-                                ?: "Pilih Sidik Jari...",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (selectedFingerprint != null) MaterialTheme.colorScheme.onSurface
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
-                    }
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Dropdown"
-                    )
-                }
-            }
-
-            DropdownMenu(
-                expanded = dropdownExpanded,
-                onDismissRequest = { dropdownExpanded = false },
-                modifier = Modifier.fillMaxWidth(0.9f)
-            ) {
-                if (fingerprints.isEmpty()) {
-                    DropdownMenuItem(
-                        text = { Text("Belum ada sidik jari terdaftar. Daftar dulu di tab registrasi!") },
-                        onClick = { dropdownExpanded = false }
-                    )
-                } else {
-                    fingerprints.forEach { f ->
-                        DropdownMenuItem(
-                            text = { Text("${f.name} (${f.employeeId}) - ${f.department}") },
-                            onClick = {
-                                viewModel.selectFingerprint(f)
-                                dropdownExpanded = false
-                            },
-                            modifier = Modifier.testTag("fingerprint_item_${f.employeeId}")
-                        )
-                    }
-                }
-            }
-        }
-
-        // AMOLED FOD Screen Assist Mode Switch
+        // AMOLED FOD Assist Toggle
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -299,7 +290,7 @@ fun ScanScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
             }
         }
 
-        // Main Scanning Area
+        // Main Scan Card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -320,14 +311,14 @@ fun ScanScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // Biometric Scanner Pad inside an ambient glow overlay
+                // Biometric Scanner Pad (visual only)
                 Box(
                     modifier = Modifier
                         .size(200.dp)
                         .background(
                             Brush.radialGradient(
                                 colors = listOf(
-                                    if (amoledFodAssist) Color(0x4000FF88) else Color(0x3B6366F1), // Glowing aura
+                                    if (amoledFodAssist) Color(0x4000FF88) else Color(0x3B6366F1),
                                     Color.Transparent
                                 )
                             )
@@ -339,37 +330,40 @@ fun ScanScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                         progress = scanProgress,
                         success = scanSuccess,
                         amoledFodAssist = amoledFodAssist,
-                        onStartScan = {
-                            if (selectedFingerprint == null) {
-                                viewModel.setScanMessage("Pilih profil sidik jari terlebih dahulu!")
-                            } else {
-                                val isAvailable = BiometricPromptUtils.isBiometricAvailable(currentContext)
-                                if (isAvailable == "SUCCESS" && currentContext is androidx.fragment.app.FragmentActivity) {
-                                    BiometricPromptUtils.showBiometricPrompt(
-                                        activity = currentContext,
-                                        title = "Absensi Sidik Jari Secure",
-                                        subtitle = "Verifikasi Sidik Jari untuk ${selectedFingerprint?.name}",
-                                        description = "Letakkan jari Anda pada sensor biometrik perangkat untuk memverifikasi dan mengirim absensi terenkripsi.",
-                                        onSuccess = {
-                                            viewModel.startAttendanceScan()
-                                        },
-                                        onError = { errorString ->
-                                            viewModel.setScanMessage("Gagal Biometrik Perangkat: $errorString")
-                                        }
-                                    )
-                                } else {
-                                    // Fallback to secure emulation/simulation mode
-                                    viewModel.startAttendanceScan()
-                                }
-                            }
-                        },
+                        onStartScan = {},
                         onCancelScan = { viewModel.cancelScanning() }
                     )
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // Information Card
+                // Scan Button — always enabled, triggers biometric then auto-detects fingerprint
+                Button(
+                    onClick = { performScan() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = !isScanning,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (amoledFodAssist) Color(0xFF00FF88) else MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Fingerprint,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Mulai Absensi",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Text(
                     text = scanMessage,
                     style = MaterialTheme.typography.bodyMedium,
@@ -409,8 +403,7 @@ fun ScanScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                     }
                 }
 
-                // Security notice inside the reader
-                AnimatedVisibility(visible = scanSuccess == true && selectedFingerprint != null) {
+                AnimatedVisibility(visible = scanSuccess == true) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -501,15 +494,6 @@ fun ScannerPadWidget(
     Box(
         modifier = Modifier
             .size(180.dp)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onPress = {
-                        onStartScan()
-                        tryAwaitRelease()
-                        onCancelScan()
-                    }
-                )
-            }
             .testTag("fingerprint_scanner_pad"),
         contentAlignment = Alignment.Center
     ) {
@@ -621,7 +605,7 @@ fun ScannerPadWidget(
                 .padding(horizontal = 14.dp, vertical = 6.dp)
         ) {
             Text(
-                text = if (isScanning) "MEMINDAI..." else if (success == true) "BERHASIL" else if (success == false) "GAGAL" else "TEKAN & TAHAN",
+                text = if (isScanning) "MEMINDAI..." else if (success == true) "BERHASIL" else if (success == false) "GAGAL" else "TEKAN",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = if (success == null && !isScanning) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,

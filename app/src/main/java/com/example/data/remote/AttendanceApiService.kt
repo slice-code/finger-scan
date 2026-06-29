@@ -8,21 +8,48 @@ import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Url
 import java.util.concurrent.TimeUnit
 
+data class ApiEmployee(
+    val id: String,
+    val nama: String
+)
+
+data class VerifyResponse(
+    val status: String,
+    val employeeId: String? = null,
+    val name: String? = null,
+    val message: String? = null
+)
+
 interface AttendanceApiService {
 
+    @GET
+    suspend fun getEmployees(
+        @Url url: String
+    ): Response<List<ApiEmployee>>
+
     @POST
-    suspend fun sendAttendance(
+    suspend fun registerFingerprint(
         @Url url: String,
         @Header("Content-Type") contentType: String = "application/json",
         @Header("X-Signature") signature: String,
         @Header("X-Encryption-Key") encryptionKeyId: String = "AES-256",
         @Body body: RequestBody
-    ): Response<ResponseBody>
+    ): Response<VerifyResponse>
+
+    @POST
+    suspend fun verifyAttendance(
+        @Url url: String,
+        @Header("Content-Type") contentType: String = "application/json",
+        @Header("X-Signature") signature: String,
+        @Header("X-Encryption-Key") encryptionKeyId: String = "AES-256",
+        @Body body: RequestBody
+    ): Response<VerifyResponse>
 
     companion object {
         fun create(): AttendanceApiService {
@@ -36,7 +63,6 @@ interface AttendanceApiService {
                 .addInterceptor(logging)
                 .build()
 
-            // Retrofit requires a placeholder base URL even when using dynamic @Url
             return Retrofit.Builder()
                 .baseUrl("https://placeholder.api/")
                 .client(client)

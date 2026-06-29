@@ -9,10 +9,11 @@ import javax.crypto.spec.SecretKeySpec
 object BiometricEncryptionUtils {
 
     /**
-     * Generates a unique SHA-256 fingerprint biometric signature based on name, nip, and dynamic coordinates.
+     * Generates a deterministic SHA-256 fingerprint signature based on employee ID.
+     * No random seed — server-side matching compares the same deterministic hash.
      */
-    fun generateFingerprintHash(name: String, employeeId: String, seed: String): String {
-        val input = "FINGERPRINT_TEMPLATE_V1|$name|$employeeId|$seed"
+    fun generateFingerprintHash(employeeId: String): String {
+        val input = "FINGERPRINT_TEMPLATE_V1|$employeeId"
         val bytes = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
         return bytes.joinToString("") { "%02x".format(it) }
     }

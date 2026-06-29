@@ -250,7 +250,7 @@ fun HistoryScreen(viewModel: MainViewModel, modifier: Modifier = Modifier) {
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "$formattedTime • Divisi: ${log.department}",
+                                        text = "$formattedTime • ID: ${log.employeeId}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
